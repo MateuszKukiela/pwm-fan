@@ -1,0 +1,16 @@
+DOMAIN = "pwm_fan"
+CONF_SOURCE_ENTITY = "source_entity"
+CONF_PWM_PERIOD = "pwm_period"
+CONF_RAMP_UP_DURATION = "ramp_up_duration"
+CONF_SOURCE_SPEED = "source_speed"
+CONF_MIN_ON_TIME = "min_on_time"
+CONF_MIN_OFF_TIME = "min_off_time"
+
+CONF_GAMMA = "gamma"
+
+DEFAULT_PWM_PERIOD = 5.0
+DEFAULT_RAMP_UP_DURATION = 2.0
+DEFAULT_SOURCE_SPEED = 100
+DEFAULT_MIN_ON_TIME = 0.5
+DEFAULT_MIN_OFF_TIME = 0.5
+DEFAULT_GAMMA = 1.0

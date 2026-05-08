@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up PWM Fan",
+        "description": "Pick your existing fan entity. A new fan entity will be created that controls speed via PWM (cycling on/off).",
+        "data": {
+          "source_entity": "Source fan entity",
+          "name": "Name (optional)",
+          "pwm_period": "PWM cycle period (s)",
+          "min_on_time": "Minimum ON time per cycle (s)",
+          "min_off_time": "Minimum OFF time per cycle (s)",
+          "gamma": "Power curve exponent (0.1–2.0; <1 boosts low speeds)",
+          "ramp_up_duration": "Ramp-up duration (s)",
+          "source_speed": "Source fan speed during ON phase (%)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This fan entity is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PWM Fan options",
+        "data": {
+          "pwm_period": "PWM cycle period (s)",
+          "min_on_time": "Minimum ON time per cycle (s)",
+          "min_off_time": "Minimum OFF time per cycle (s)",
+          "gamma": "Power curve exponent (0.1–2.0; <1 boosts low speeds)",
+          "ramp_up_duration": "Ramp-up duration (s)",
+          "source_speed": "Source fan speed during ON phase (%)"
+        }
+      }
+    }
+  }
+}
