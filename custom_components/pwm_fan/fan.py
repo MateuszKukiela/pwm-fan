@@ -106,7 +106,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._stop_pwm()
         await self._source_off()
 
-    async def async_turn_on(self, percentage: int | None = None, **kwargs: Any) -> None:
+    async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs: Any) -> None:
         self._attr_is_on = True
         if percentage is not None:
             self._attr_percentage = percentage
