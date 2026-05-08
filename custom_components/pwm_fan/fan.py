@@ -15,6 +15,7 @@ from .const import (
     CONF_MIN_OFF_TIME,
     CONF_MIN_ON_TIME,
     CONF_PWM_PERIOD,
+    CONF_PWM_THRESHOLD,
     CONF_RAMP_UP_DURATION,
     CONF_SOURCE_ENTITY,
     CONF_SOURCE_SPEED,
@@ -22,6 +23,7 @@ from .const import (
     DEFAULT_MIN_OFF_TIME,
     DEFAULT_MIN_ON_TIME,
     DEFAULT_PWM_PERIOD,
+    DEFAULT_PWM_THRESHOLD,
     DEFAULT_RAMP_UP_DURATION,
     DEFAULT_SOURCE_SPEED,
 )
@@ -81,6 +83,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._gamma = _get_opt(entry, CONF_GAMMA, DEFAULT_GAMMA)
         self._ramp_up_duration = _get_opt(entry, CONF_RAMP_UP_DURATION, DEFAULT_RAMP_UP_DURATION)
         self._source_speed = int(_get_opt(entry, CONF_SOURCE_SPEED, DEFAULT_SOURCE_SPEED))
+        self._pwm_threshold = int(_get_opt(entry, CONF_PWM_THRESHOLD, DEFAULT_PWM_THRESHOLD))
 
     @property
     def supported_features(self) -> FanEntityFeature:
@@ -102,8 +105,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
                 self._attr_current_direction = direction
 
         if self._attr_is_on and self._attr_percentage > 0:
-            # No ramp on restore — fan was already running before restart
-            self._start_pwm(ramp_up=False)
+            await self._apply_speed(self._attr_percentage, ramp_up=False)
 
     async def async_will_remove_from_hass(self) -> None:
         self._stop_pwm()
@@ -116,8 +118,8 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         else:
             self._attr_percentage = self._last_percentage
         self._last_percentage = self._attr_percentage
-        self._start_pwm(ramp_up=True)
         self.async_write_ha_state()
+        await self._apply_speed(self._attr_percentage, ramp_up=True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._attr_is_on = False
@@ -134,8 +136,8 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._attr_percentage = percentage
         self._last_percentage = percentage
         self._attr_is_on = True
-        self._start_pwm(ramp_up=False)
         self.async_write_ha_state()
+        await self._apply_speed(percentage, ramp_up=False)
 
     async def async_set_direction(self, direction: str) -> None:
         self._attr_current_direction = direction
@@ -149,7 +151,21 @@ class PwmFanEntity(FanEntity, RestoreEntity):
     async def async_options_updated(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._load_options(entry)
         if self._attr_is_on:
-            self._start_pwm(ramp_up=False)
+            await self._apply_speed(self._attr_percentage, ramp_up=False)
+
+    def _is_native_mode(self, pct: int) -> bool:
+        return (
+            self._pwm_threshold > 0
+            and pct >= self._pwm_threshold
+            and self._source_supports_speed()
+        )
+
+    async def _apply_speed(self, pct: int, ramp_up: bool = False) -> None:
+        if self._is_native_mode(pct):
+            self._stop_pwm()
+            await self._source_on(speed=pct)
+        else:
+            self._start_pwm(ramp_up=ramp_up)
 
     def _start_pwm(self, ramp_up: bool = False) -> None:
         self._stop_pwm()
@@ -178,8 +194,6 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         )
 
     def _calc_times(self, pct: float) -> tuple[float, float]:
-        # Apply power curve: duty = (speed/100)^gamma * 100
-        # gamma < 1 boosts low speeds to compensate for fan inertia losses
         duty = (pct / 100.0) ** self._gamma
         on_time = max(duty * self._pwm_period, self._min_on_time)
         off_time = max((1.0 - duty) * self._pwm_period, self._min_off_time)

@@ -17,6 +17,7 @@ from .const import (
     CONF_MIN_OFF_TIME,
     CONF_MIN_ON_TIME,
     CONF_PWM_PERIOD,
+    CONF_PWM_THRESHOLD,
     CONF_RAMP_UP_DURATION,
     CONF_SOURCE_ENTITY,
     CONF_SOURCE_SPEED,
@@ -24,6 +25,7 @@ from .const import (
     DEFAULT_MIN_OFF_TIME,
     DEFAULT_MIN_ON_TIME,
     DEFAULT_PWM_PERIOD,
+    DEFAULT_PWM_THRESHOLD,
     DEFAULT_RAMP_UP_DURATION,
     DEFAULT_SOURCE_SPEED,
     DOMAIN,
@@ -41,6 +43,9 @@ _RAMP_SELECTOR = NumberSelector(
 _SPEED_SELECTOR = NumberSelector(
     NumberSelectorConfig(min=1, max=100, step=1, mode=NumberSelectorMode.SLIDER, unit_of_measurement="%")
 )
+_THRESHOLD_SELECTOR = NumberSelector(
+    NumberSelectorConfig(min=0, max=100, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="%")
+)
 _GAMMA_SELECTOR = NumberSelector(
     NumberSelectorConfig(min=0.1, max=2.0, step=0.05, mode=NumberSelectorMode.BOX)
 )
@@ -49,6 +54,7 @@ STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_SOURCE_ENTITY): EntitySelector(EntitySelectorConfig(domain=FAN_DOMAIN)),
         vol.Optional("name"): TextSelector(),
+        vol.Optional(CONF_PWM_THRESHOLD, default=DEFAULT_PWM_THRESHOLD): _THRESHOLD_SELECTOR,
         vol.Optional(CONF_PWM_PERIOD, default=DEFAULT_PWM_PERIOD): _PERIOD_SELECTOR,
         vol.Optional(CONF_MIN_ON_TIME, default=DEFAULT_MIN_ON_TIME): _TIME_SELECTOR,
         vol.Optional(CONF_MIN_OFF_TIME, default=DEFAULT_MIN_OFF_TIME): _TIME_SELECTOR,
@@ -65,6 +71,7 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
 
     return vol.Schema(
         {
+            vol.Optional(CONF_PWM_THRESHOLD, default=_get(CONF_PWM_THRESHOLD, DEFAULT_PWM_THRESHOLD)): _THRESHOLD_SELECTOR,
             vol.Optional(CONF_PWM_PERIOD, default=_get(CONF_PWM_PERIOD, DEFAULT_PWM_PERIOD)): _PERIOD_SELECTOR,
             vol.Optional(CONF_MIN_ON_TIME, default=_get(CONF_MIN_ON_TIME, DEFAULT_MIN_ON_TIME)): _TIME_SELECTOR,
             vol.Optional(CONF_MIN_OFF_TIME, default=_get(CONF_MIN_OFF_TIME, DEFAULT_MIN_OFF_TIME)): _TIME_SELECTOR,
@@ -94,6 +101,7 @@ class PwmFanConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 title=name,
                 data={
                     CONF_SOURCE_ENTITY: source_entity_id,
+                    CONF_PWM_THRESHOLD: user_input.get(CONF_PWM_THRESHOLD, DEFAULT_PWM_THRESHOLD),
                     CONF_PWM_PERIOD: user_input.get(CONF_PWM_PERIOD, DEFAULT_PWM_PERIOD),
                     CONF_MIN_ON_TIME: user_input.get(CONF_MIN_ON_TIME, DEFAULT_MIN_ON_TIME),
                     CONF_MIN_OFF_TIME: user_input.get(CONF_MIN_OFF_TIME, DEFAULT_MIN_OFF_TIME),
