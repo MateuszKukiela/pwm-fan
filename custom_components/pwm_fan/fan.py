@@ -194,7 +194,10 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         )
 
     def _calc_times(self, pct: float) -> tuple[float, float]:
-        duty = (pct / 100.0) ** self._gamma
+        # When a threshold is set, stretch the full PWM range across 0→threshold
+        scale = self._pwm_threshold if self._pwm_threshold > 0 else 100
+        duty = (pct / scale) ** self._gamma
+        duty = min(duty, 1.0)
         on_time = max(duty * self._pwm_period, self._min_on_time)
         off_time = max((1.0 - duty) * self._pwm_period, self._min_off_time)
         return on_time, off_time
