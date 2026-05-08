@@ -30,13 +30,13 @@ from .const import (
 )
 
 _PERIOD_SELECTOR = NumberSelector(
-    NumberSelectorConfig(min=0.5, max=300, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+    NumberSelectorConfig(min=0.1, max=300, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
 )
 _TIME_SELECTOR = NumberSelector(
-    NumberSelectorConfig(min=0.5, max=60, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+    NumberSelectorConfig(min=0.1, max=60, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
 )
 _RAMP_SELECTOR = NumberSelector(
-    NumberSelectorConfig(min=0, max=30, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+    NumberSelectorConfig(min=0, max=30, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
 )
 _SPEED_SELECTOR = NumberSelector(
     NumberSelectorConfig(min=1, max=100, step=1, mode=NumberSelectorMode.SLIDER, unit_of_measurement="%")
