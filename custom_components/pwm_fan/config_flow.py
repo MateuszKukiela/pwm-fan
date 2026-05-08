@@ -33,7 +33,7 @@ _PERIOD_SELECTOR = NumberSelector(
     NumberSelectorConfig(min=0.1, max=300, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
 )
 _TIME_SELECTOR = NumberSelector(
-    NumberSelectorConfig(min=0.1, max=60, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+    NumberSelectorConfig(min=0.0, max=60, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
 )
 _RAMP_SELECTOR = NumberSelector(
     NumberSelectorConfig(min=0, max=30, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
