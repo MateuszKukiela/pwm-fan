@@ -71,6 +71,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._attr_percentage = 0
         self._attr_current_direction = "forward"
         self._pwm_task: asyncio.Task | None = None
+        self._last_percentage: int = 100
         self._load_options(config_entry)
 
     def _load_options(self, entry: ConfigEntry) -> None:
@@ -95,6 +96,8 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             self._attr_is_on = last_state.state == "on"
             if pct := last_state.attributes.get("percentage"):
                 self._attr_percentage = int(pct)
+                if int(pct) > 0:
+                    self._last_percentage = int(pct)
             if direction := last_state.attributes.get("direction"):
                 self._attr_current_direction = direction
 
@@ -110,24 +113,27 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._attr_is_on = True
         if percentage is not None:
             self._attr_percentage = percentage
-        elif self._attr_percentage == 0:
-            self._attr_percentage = 100
+        else:
+            self._attr_percentage = self._last_percentage
+        self._last_percentage = self._attr_percentage
         self._start_pwm(ramp_up=True)
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._attr_is_on = False
         self._stop_pwm()
+        self.async_write_ha_state()
         await self._source_off()
+        self._attr_percentage = 0
         self.async_write_ha_state()
 
     async def async_set_percentage(self, percentage: int) -> None:
-        self._attr_percentage = percentage
         if percentage == 0:
             await self.async_turn_off()
             return
+        self._attr_percentage = percentage
+        self._last_percentage = percentage
         self._attr_is_on = True
-        # Speed change while running — no ramp, just adjust the cycle
         self._start_pwm(ramp_up=False)
         self.async_write_ha_state()
 
