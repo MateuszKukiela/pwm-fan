@@ -30,10 +30,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# After calling source_on, wait this long before checking for external override.
-# Must exceed the BLE state-confirmation latency (~585 ms observed).
-_BLE_CONFIRM = 1.2
-
 
 def _get_opt(entry: ConfigEntry, key: str, default: Any) -> Any:
     return entry.options.get(key, entry.data.get(key, default))
@@ -220,24 +216,14 @@ class PwmFanEntity(FanEntity, RestoreEntity):
 
                 if pct >= 100:
                     await self._source_on()
-                    confirm = min(_BLE_CONFIRM, self._pwm_period)
-                    await asyncio.sleep(confirm)
-                    if self._source_is_off():
-                        await self._handle_external_off()
-                        return
-                    await asyncio.sleep(self._pwm_period - confirm)
+                    await asyncio.sleep(self._pwm_period)
                 elif pct <= 0:
                     await self._source_off()
                     await asyncio.sleep(self._pwm_period)
                 else:
                     on_time, off_time = self._calc_times(pct)
                     await self._source_on()
-                    confirm = min(_BLE_CONFIRM, on_time)
-                    await asyncio.sleep(confirm)
-                    if self._source_is_off():
-                        await self._handle_external_off()
-                        return
-                    await asyncio.sleep(on_time - confirm)
+                    await asyncio.sleep(on_time)
                     await self._source_off()
                     await asyncio.sleep(off_time)
 
@@ -250,13 +236,3 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             except Exception:
                 pass
 
-    def _source_is_off(self) -> bool:
-        state = self.hass.states.get(self._source_entity_id)
-        return state is not None and state.state == "off"
-
-    async def _handle_external_off(self) -> None:
-        _LOGGER.debug("External override on %s", self._source_entity_id)
-        self._attr_is_on = False
-        self._attr_percentage = 0
-        self.async_write_ha_state()
-        await self._source_off()
