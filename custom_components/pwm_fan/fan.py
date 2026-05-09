@@ -246,10 +246,12 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         service_data: dict[str, Any] = {"entity_id": self._source_entity_id}
         if self._source_supports_speed():
             service_data["percentage"] = speed if speed is not None else self._source_speed
+        _LOGGER.debug("source_on: %s", service_data)
         await self.hass.services.async_call("fan", "turn_on", service_data, blocking=True)
 
     async def _source_off(self) -> None:
         self._source_should_be_on = False
+        _LOGGER.debug("source_off: %s", self._source_entity_id)
         await self.hass.services.async_call(
             "fan", "turn_off", {"entity_id": self._source_entity_id}, blocking=True
         )
@@ -265,6 +267,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
     async def _pwm_loop(self, ramp_up: bool = False) -> None:
         try:
             if ramp_up and self._ramp_up_duration > 0:
+                _LOGGER.debug("PWM ramp-up start")
                 await self._source_on(speed=100)
                 await asyncio.sleep(self._ramp_up_duration)
 
@@ -279,13 +282,14 @@ class PwmFanEntity(FanEntity, RestoreEntity):
                     await asyncio.sleep(self._pwm_period)
                 else:
                     on_time, off_time = self._calc_times(pct)
+                    _LOGGER.debug("PWM cycle pct=%s on=%.2fs off=%.2fs", pct, on_time, off_time)
                     await self._source_on()
                     await asyncio.sleep(on_time)
                     await self._source_off()
                     await asyncio.sleep(off_time)
 
         except asyncio.CancelledError:
-            pass
+            _LOGGER.debug("PWM loop cancelled")
         except Exception:
             _LOGGER.exception("PWM loop error for %s", self._source_entity_id)
             self._source_should_be_on = False
