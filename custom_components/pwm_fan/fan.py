@@ -18,7 +18,7 @@ from .const import (
     CONF_PWM_PERIOD,
     CONF_PWM_THRESHOLD,
     CONF_RAMP_UP_DURATION,
-    CONF_SOURCE_ENTITY,
+    CONF_SOURCE_ENTITY,  # also used in async_options_updated for change detection
     CONF_SOURCE_SPEED,
     DEFAULT_GAMMA,
     DEFAULT_MIN_OFF_TIME,
@@ -76,6 +76,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._pwm_task: asyncio.Task | None = None
         self._last_percentage: int = 100
         self._source_should_be_on: bool = False
+        self._unsubscribe_state_listener: Any = None
         self._load_options(config_entry)
 
     def _load_options(self, entry: ConfigEntry) -> None:
@@ -106,16 +107,18 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             if direction := last_state.attributes.get("direction"):
                 self._attr_current_direction = direction
 
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass,
-                self._source_entity_id,
-                self._handle_source_state_change,
-            )
-        )
+        self._subscribe_state_listener()
 
         if self._attr_is_on and self._attr_percentage > 0:
             await self._apply_speed(self._attr_percentage, ramp_up=False)
+
+    def _subscribe_state_listener(self) -> None:
+        if self._unsubscribe_state_listener:
+            self._unsubscribe_state_listener()
+        self._unsubscribe_state_listener = async_track_state_change_event(
+            self.hass, self._source_entity_id, self._handle_source_state_change
+        )
+        self.async_on_remove(self._unsubscribe_state_listener)
 
     @callback
     def _handle_source_state_change(self, event: Event) -> None:
@@ -175,7 +178,17 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_options_updated(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        new_source = entry.options.get(CONF_SOURCE_ENTITY, entry.data.get(CONF_SOURCE_ENTITY))
+        source_changed = new_source and new_source != self._source_entity_id
+
+        if source_changed:
+            self._stop_pwm()
+            await self._source_off()
+            self._source_entity_id = new_source
+            self._subscribe_state_listener()
+
         self._load_options(entry)
+
         if self._attr_is_on:
             await self._apply_speed(self._attr_percentage, ramp_up=False)
 
