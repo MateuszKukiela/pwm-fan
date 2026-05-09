@@ -137,7 +137,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         # running freely, so after this delay the fan will have received multiple
         # turn_on commands. If it's still "off" while we're in an on-phase,
         # a remote genuinely overrode us.
-        await asyncio.sleep(max(self._pwm_period * 2, 5.0))
+        await asyncio.sleep(2.0)
         source_state = self.hass.states.get(self._source_entity_id)
         if (
             not self._attr_is_on
