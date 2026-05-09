@@ -73,6 +73,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._attr_percentage = 0
         self._attr_current_direction = "forward"
         self._pwm_task: asyncio.Task | None = None
+        self._external_off_task: asyncio.Task | None = None
         self._last_percentage: int = 100
         self._source_should_be_on: bool = False
         self._unsubscribe_state_listener: Any = None
@@ -132,7 +133,9 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             self._attr_is_on = False
             self._attr_percentage = 0
             self.async_write_ha_state()
-            self.hass.async_create_task(self._async_handle_external_off())
+            if self._external_off_task and not self._external_off_task.done():
+                self._external_off_task.cancel()
+            self._external_off_task = self.hass.async_create_task(self._async_handle_external_off())
 
     async def _async_handle_external_off(self) -> None:
         await self._stop_pwm_async()
@@ -141,11 +144,18 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         except Exception:
             pass
 
+    def _cancel_external_off_task(self) -> None:
+        if self._external_off_task and not self._external_off_task.done():
+            self._external_off_task.cancel()
+        self._external_off_task = None
+
     async def async_will_remove_from_hass(self) -> None:
+        self._cancel_external_off_task()
         await self._stop_pwm_async()
         await self._source_off()
 
     async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs: Any) -> None:
+        self._cancel_external_off_task()
         self._attr_is_on = True
         if percentage is not None:
             self._attr_percentage = percentage
@@ -156,6 +166,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         await self._apply_speed(self._attr_percentage, ramp_up=True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        self._cancel_external_off_task()
         self._attr_is_on = False
         await self._stop_pwm_async()
         self.async_write_ha_state()
@@ -164,6 +175,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_set_percentage(self, percentage: int) -> None:
+        self._cancel_external_off_task()
         if percentage == 0:
             await self.async_turn_off()
             return
