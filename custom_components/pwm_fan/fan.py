@@ -191,12 +191,12 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         if self._source_supports_speed():
             service_data["percentage"] = speed if speed is not None else self._source_speed
         _LOGGER.debug("source_on: %s", service_data)
-        await self.hass.services.async_call("fan", "turn_on", service_data, blocking=True)
+        await self.hass.services.async_call("fan", "turn_on", service_data)
 
     async def _source_off(self) -> None:
         _LOGGER.debug("source_off: %s", self._source_entity_id)
         await self.hass.services.async_call(
-            "fan", "turn_off", {"entity_id": self._source_entity_id}, blocking=True
+            "fan", "turn_off", {"entity_id": self._source_entity_id}
         )
 
     def _calc_times(self, pct: float) -> tuple[float, float]:
