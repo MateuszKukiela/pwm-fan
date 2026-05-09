@@ -1,7 +1,7 @@
 {
   "domain": "pwm_fan",
   "name": "PWM Fan",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "documentation": "https://github.com/MateuszKukiela/pwm-fan",
   "issue_tracker": "https://github.com/MateuszKukiela/pwm-fan/issues",
   "codeowners": ["@MateuszKukiela"],

@@ -130,15 +130,28 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             and self._attr_is_on
             and self._source_should_be_on
         ):
-            _LOGGER.debug("External turn-off detected on %s", self._source_entity_id)
-            self._attr_is_on = False
-            self._attr_percentage = 0
-            self.async_write_ha_state()
+            _LOGGER.debug("Source %s off while expected on — debouncing", self._source_entity_id)
             if self._external_off_task and not self._external_off_task.done():
-                self._external_off_task.cancel()
+                return  # already waiting
             self._external_off_task = self.hass.async_create_task(self._async_handle_external_off())
 
     async def _async_handle_external_off(self) -> None:
+        # Wait 2 full PWM cycles — BLE glitches recover within a second,
+        # a genuine remote press keeps the fan off.
+        await asyncio.sleep(max(self._pwm_period * 2, 5.0))
+        source_state = self.hass.states.get(self._source_entity_id)
+        if (
+            not self._attr_is_on
+            or source_state is None
+            or source_state.state != "off"
+            or not self._source_should_be_on
+        ):
+            _LOGGER.debug("External off on %s was transient, ignoring", self._source_entity_id)
+            return
+        _LOGGER.debug("External turn-off confirmed on %s", self._source_entity_id)
+        self._attr_is_on = False
+        self._attr_percentage = 0
+        self.async_write_ha_state()
         await self._stop_pwm_async()
         try:
             await self._source_off()
