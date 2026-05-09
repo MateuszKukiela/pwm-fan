@@ -32,7 +32,8 @@
           "min_off_time": "Minimum OFF time per cycle (s)",
           "gamma": "Power curve exponent (0.1–2.0; <1 boosts low speeds)",
           "ramp_up_duration": "Ramp-up duration (s)",
-          "source_speed": "Source fan speed during ON phase (%)"
+          "source_speed": "Source fan speed during ON phase (%)",
+          "remote_off_id": "Remote OFF id (leave blank to discover — check HA logs after pressing remote)"
         }
       }
     }

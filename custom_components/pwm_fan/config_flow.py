@@ -19,6 +19,7 @@ from .const import (
     CONF_PWM_PERIOD,
     CONF_PWM_THRESHOLD,
     CONF_RAMP_UP_DURATION,
+    CONF_REMOTE_OFF_ID,
     CONF_SOURCE_ENTITY,
     CONF_SOURCE_SPEED,
     DEFAULT_GAMMA,
@@ -80,6 +81,7 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
             vol.Optional(CONF_GAMMA, default=_get(CONF_GAMMA, DEFAULT_GAMMA)): _GAMMA_SELECTOR,
             vol.Optional(CONF_RAMP_UP_DURATION, default=_get(CONF_RAMP_UP_DURATION, DEFAULT_RAMP_UP_DURATION)): _RAMP_SELECTOR,
             vol.Optional(CONF_SOURCE_SPEED, default=_get(CONF_SOURCE_SPEED, DEFAULT_SOURCE_SPEED)): _SPEED_SELECTOR,
+            vol.Optional(CONF_REMOTE_OFF_ID, default=_get(CONF_REMOTE_OFF_ID, "")): TextSelector(),
         }
     )
 

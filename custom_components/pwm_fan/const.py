@@ -8,6 +8,7 @@ CONF_MIN_OFF_TIME = "min_off_time"
 
 CONF_GAMMA = "gamma"
 CONF_PWM_THRESHOLD = "pwm_threshold"
+CONF_REMOTE_OFF_ID = "remote_off_id"
 
 DEFAULT_PWM_PERIOD = 2.2
 DEFAULT_RAMP_UP_DURATION = 4.0

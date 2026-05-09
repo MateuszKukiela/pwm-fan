@@ -2,8 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
+from homeassistant.components.bluetooth import (
+    BluetoothChange,
+    BluetoothScanningMode,
+    BluetoothServiceInfoBleak,
+    async_register_callback,
+)
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
@@ -18,6 +25,7 @@ from .const import (
     CONF_PWM_PERIOD,
     CONF_PWM_THRESHOLD,
     CONF_RAMP_UP_DURATION,
+    CONF_REMOTE_OFF_ID,
     CONF_SOURCE_ENTITY,
     CONF_SOURCE_SPEED,
     DEFAULT_GAMMA,
@@ -29,11 +37,39 @@ from .const import (
     DEFAULT_SOURCE_SPEED,
 )
 
+# ha-ble-adv coordinator singleton key in hass.data
+_BLE_ADV_COORD_KEY = "ble_adv/coordinator_unique_id"
+
 _LOGGER = logging.getLogger(__name__)
 
 
 def _get_opt(entry: ConfigEntry, key: str, default: Any) -> Any:
     return entry.options.get(key, entry.data.get(key, default))
+
+
+def _reconstruct_adv_raw(service_info: BluetoothServiceInfoBleak) -> bytes | None:
+    """Rebuild raw advertisement bytes from HA's parsed Bluetooth service info.
+
+    ha-ble-adv's BleAdvAdvertisement.FromRaw expects the original on-air bytes.
+    HA's Bluetooth stack gives us parsed service/manufacturer data, so we
+    reconstruct the minimal AD structure that the codec parser needs.
+    Returns None if no usable AD data is present.
+    """
+    flags = bytes([0x02, 0x01, 0x02])
+    for uuid_str, data in service_info.advertisement.service_data.items():
+        try:
+            short_uuid = int(uuid_str.replace("-", "")[:8], 16) & 0xFFFF
+        except (ValueError, IndexError):
+            continue
+        uuid_bytes = bytes([short_uuid & 0xFF, (short_uuid >> 8) & 0xFF])
+        payload = uuid_bytes + data
+        ad = bytes([len(payload) + 1, 0x16]) + payload
+        return flags + ad
+    for company_id, data in service_info.advertisement.manufacturer_data.items():
+        payload = bytes([company_id & 0xFF, (company_id >> 8) & 0xFF]) + data
+        ad = bytes([len(payload) + 1, 0xFF]) + payload
+        return flags + ad
+    return None
 
 
 async def async_setup_entry(
@@ -118,6 +154,14 @@ class PwmFanEntity(FanEntity, RestoreEntity):
                 self.hass, self._source_entity_id, self._handle_source_state_change
             )
         )
+        self.async_on_remove(
+            async_register_callback(
+                self.hass,
+                self._handle_bluetooth,
+                None,
+                BluetoothScanningMode.PASSIVE,
+            )
+        )
 
         if self._attr_is_on and self._attr_percentage > 0:
             await self._apply_speed(self._attr_percentage, ramp_up=False)
@@ -146,6 +190,60 @@ class PwmFanEntity(FanEntity, RestoreEntity):
                 self._external_off_task = self.hass.async_create_task(
                     self._handle_external_off()
                 )
+
+    @callback
+    def _handle_bluetooth(
+        self,
+        service_info: BluetoothServiceInfoBleak,
+        change: BluetoothChange,
+    ) -> None:
+        """Detect remote off command from raw BLE advertisements via HA Bluetooth.
+
+        Registered as a passive Bluetooth callback. Reconstructs raw advertisement
+        bytes from HA's parsed representation, decodes via the ha-ble-adv coordinator,
+        and checks for a fan-off command matching the configured remote ID.
+        Fires before ha-ble-adv updates entity state, bypassing the BLE glitch window.
+        """
+        if not self._attr_is_on or not self._source_should_be_on:
+            return
+        coordinator = self.hass.data.get(_BLE_ADV_COORD_KEY)
+        if coordinator is None:
+            return
+        raw = _reconstruct_adv_raw(service_info)
+        if raw is None:
+            return
+        try:
+            result = coordinator.decode_raw(raw.hex())
+        except Exception:
+            return
+        if not result or len(result) < 4:
+            return
+        ent_attrs_repr: str = result[-1]
+        conf_repr: str = result[-2]
+        if "'on': False" not in ent_attrs_repr or "fan_" not in ent_attrs_repr:
+            return
+        m = re.search(r"id: 0x([0-9A-Fa-f]+)", conf_repr)
+        if not m:
+            return
+        detected_id = m.group(1).upper()
+        remote_off_id: str | None = _get_opt(self._config_entry, CONF_REMOTE_OFF_ID, None)
+        if remote_off_id:
+            if detected_id != remote_off_id.upper():
+                return
+        else:
+            _LOGGER.info(
+                "BLE fan-off detected (id=0x%s). "
+                "Set remote_off_id=%s in PWM Fan options to enable direct detection.",
+                detected_id, detected_id,
+            )
+            return
+        _LOGGER.debug("Remote off via Bluetooth adv id=0x%s", detected_id)
+        if self._external_off_task is None or self._external_off_task.done():
+            self._ble_confirmed_on = False
+            self._source_should_be_on = False
+            self._external_off_task = self.hass.async_create_task(
+                self._handle_external_off()
+            )
 
     async def _handle_external_off(self) -> None:
         _LOGGER.debug("External override on %s", self._source_entity_id)
