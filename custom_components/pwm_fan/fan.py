@@ -6,8 +6,9 @@ from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
@@ -74,6 +75,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._attr_current_direction = "forward"
         self._pwm_task: asyncio.Task | None = None
         self._last_percentage: int = 100
+        self._source_should_be_on: bool = False
         self._load_options(config_entry)
 
     def _load_options(self, entry: ConfigEntry) -> None:
@@ -104,8 +106,32 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             if direction := last_state.attributes.get("direction"):
                 self._attr_current_direction = direction
 
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                self._source_entity_id,
+                self._handle_source_state_change,
+            )
+        )
+
         if self._attr_is_on and self._attr_percentage > 0:
             await self._apply_speed(self._attr_percentage, ramp_up=False)
+
+    @callback
+    def _handle_source_state_change(self, event: Event) -> None:
+        new_state = event.data.get("new_state")
+        if (
+            new_state is not None
+            and new_state.state == "off"
+            and self._attr_is_on
+            and self._source_should_be_on
+        ):
+            _LOGGER.debug("External turn-off detected on %s", self._source_entity_id)
+            self._stop_pwm()
+            self._source_should_be_on = False
+            self._attr_is_on = False
+            self._attr_percentage = 0
+            self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
         self._stop_pwm()
@@ -175,6 +201,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         if self._pwm_task and not self._pwm_task.done():
             self._pwm_task.cancel()
         self._pwm_task = None
+        self._source_should_be_on = False
 
     def _source_supports_speed(self) -> bool:
         state = self.hass.states.get(self._source_entity_id)
@@ -183,18 +210,19 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         return bool(state.attributes.get("supported_features", 0) & FanEntityFeature.SET_SPEED)
 
     async def _source_on(self, speed: int | None = None) -> None:
+        self._source_should_be_on = True
         service_data: dict[str, Any] = {"entity_id": self._source_entity_id}
         if self._source_supports_speed():
             service_data["percentage"] = speed if speed is not None else self._source_speed
         await self.hass.services.async_call("fan", "turn_on", service_data, blocking=True)
 
     async def _source_off(self) -> None:
+        self._source_should_be_on = False
         await self.hass.services.async_call(
             "fan", "turn_off", {"entity_id": self._source_entity_id}, blocking=True
         )
 
     def _calc_times(self, pct: float) -> tuple[float, float]:
-        # When a threshold is set, stretch the full PWM range across 0→threshold
         scale = self._pwm_threshold if self._pwm_threshold > 0 else 100
         duty = (pct / scale) ** self._gamma
         duty = min(duty, 1.0)
