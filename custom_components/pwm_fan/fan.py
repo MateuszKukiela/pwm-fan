@@ -6,8 +6,9 @@ from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
@@ -73,7 +74,15 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._attr_percentage = 0
         self._attr_current_direction = "forward"
         self._pwm_task: asyncio.Task | None = None
+        self._external_off_task: asyncio.Task | None = None
         self._last_percentage: int = 100
+        # _source_should_be_on: we intend the source to be on (cleared on source_off / stop)
+        # _ble_confirmed_on: BLE state machine reported "on" since last source_on call.
+        # External-off detection only fires when both are True, which means:
+        #   - we asked for on AND BLE confirmed it, so a state→"off" event is a real remote press,
+        #     not the ~585 ms BLE glitch that occurs before the fan physically responds.
+        self._source_should_be_on: bool = False
+        self._ble_confirmed_on: bool = False
         self._load_options(config_entry)
 
     def _load_options(self, entry: ConfigEntry) -> None:
@@ -104,14 +113,60 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             if direction := last_state.attributes.get("direction"):
                 self._attr_current_direction = direction
 
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass, self._source_entity_id, self._handle_source_state_change
+            )
+        )
+
         if self._attr_is_on and self._attr_percentage > 0:
             await self._apply_speed(self._attr_percentage, ramp_up=False)
 
+    @callback
+    def _handle_source_state_change(self, event: Event) -> None:
+        new_state = event.data.get("new_state")
+        if new_state is None:
+            return
+        if new_state.state == "on":
+            self._ble_confirmed_on = True
+            return
+        if (
+            new_state.state == "off"
+            and self._ble_confirmed_on
+            and self._source_should_be_on
+            and self._attr_is_on
+            and self._pwm_task is not None
+            and not self._pwm_task.done()
+        ):
+            # BLE previously confirmed "on", but source is now "off" while we're in an
+            # on-phase → genuine remote turn-off (not the post-source_on BLE glitch).
+            self._ble_confirmed_on = False
+            self._source_should_be_on = False
+            if self._external_off_task is None or self._external_off_task.done():
+                self._external_off_task = self.hass.async_create_task(
+                    self._handle_external_off()
+                )
+
+    async def _handle_external_off(self) -> None:
+        _LOGGER.debug("External override on %s", self._source_entity_id)
+        self._attr_is_on = False
+        self._attr_percentage = 0
+        self.async_write_ha_state()
+        await self._stop_pwm_async()
+        await self._source_off()
+
+    def _cancel_external_off_task(self) -> None:
+        if self._external_off_task and not self._external_off_task.done():
+            self._external_off_task.cancel()
+        self._external_off_task = None
+
     async def async_will_remove_from_hass(self) -> None:
+        self._cancel_external_off_task()
         await self._stop_pwm_async()
         await self._source_off()
 
     async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs: Any) -> None:
+        self._cancel_external_off_task()
         self._attr_is_on = True
         if percentage is not None:
             self._attr_percentage = percentage
@@ -122,6 +177,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         await self._apply_speed(self._attr_percentage, ramp_up=True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        self._cancel_external_off_task()
         self._attr_is_on = False
         await self._stop_pwm_async()
         self.async_write_ha_state()
@@ -130,6 +186,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_set_percentage(self, percentage: int) -> None:
+        self._cancel_external_off_task()
         if percentage == 0:
             await self.async_turn_off()
             return
@@ -179,6 +236,8 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             except (asyncio.CancelledError, Exception):
                 pass
         self._pwm_task = None
+        self._source_should_be_on = False
+        self._ble_confirmed_on = False
 
     def _source_supports_speed(self) -> bool:
         state = self.hass.states.get(self._source_entity_id)
@@ -187,12 +246,16 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         return bool(state.attributes.get("supported_features", 0) & FanEntityFeature.SET_SPEED)
 
     async def _source_on(self, speed: int | None = None) -> None:
+        self._source_should_be_on = True
+        self._ble_confirmed_on = False  # reset; wait for BLE to confirm "on" before detecting external off
         service_data: dict[str, Any] = {"entity_id": self._source_entity_id}
         if self._source_supports_speed():
             service_data["percentage"] = speed if speed is not None else self._source_speed
         await self.hass.services.async_call("fan", "turn_on", service_data)
 
     async def _source_off(self) -> None:
+        self._source_should_be_on = False
+        self._ble_confirmed_on = False
         await self.hass.services.async_call(
             "fan", "turn_off", {"entity_id": self._source_entity_id}
         )
@@ -235,4 +298,3 @@ class PwmFanEntity(FanEntity, RestoreEntity):
                 await self._source_off()
             except Exception:
                 pass
-
