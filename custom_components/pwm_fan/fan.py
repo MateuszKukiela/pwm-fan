@@ -137,7 +137,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
-        self._stop_pwm()
+        await self._stop_pwm_async()
         await self._source_off()
 
     async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs: Any) -> None:
@@ -152,7 +152,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._attr_is_on = False
-        self._stop_pwm()
+        await self._stop_pwm_async()
         self.async_write_ha_state()
         await self._source_off()
         self._attr_percentage = 0
@@ -201,18 +201,28 @@ class PwmFanEntity(FanEntity, RestoreEntity):
 
     async def _apply_speed(self, pct: int, ramp_up: bool = False) -> None:
         if self._is_native_mode(pct):
-            self._stop_pwm()
+            await self._stop_pwm_async()
             await self._source_on(speed=pct)
         else:
-            self._start_pwm(ramp_up=ramp_up)
+            await self._start_pwm(ramp_up=ramp_up)
 
-    def _start_pwm(self, ramp_up: bool = False) -> None:
-        self._stop_pwm()
+    async def _start_pwm(self, ramp_up: bool = False) -> None:
+        await self._stop_pwm_async()
         self._pwm_task = self.hass.async_create_task(self._pwm_loop(ramp_up=ramp_up))
 
     def _stop_pwm(self) -> None:
         if self._pwm_task and not self._pwm_task.done():
             self._pwm_task.cancel()
+        self._pwm_task = None
+        self._source_should_be_on = False
+
+    async def _stop_pwm_async(self) -> None:
+        if self._pwm_task and not self._pwm_task.done():
+            self._pwm_task.cancel()
+            try:
+                await self._pwm_task
+            except (asyncio.CancelledError, Exception):
+                pass
         self._pwm_task = None
         self._source_should_be_on = False
 
@@ -269,3 +279,8 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             pass
         except Exception:
             _LOGGER.exception("PWM loop error for %s", self._source_entity_id)
+            self._source_should_be_on = False
+            try:
+                await self._source_off()
+            except Exception:
+                pass
