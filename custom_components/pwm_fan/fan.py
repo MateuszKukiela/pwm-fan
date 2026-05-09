@@ -204,10 +204,11 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         and checks for a fan-off command matching the configured remote ID.
         Fires before ha-ble-adv updates entity state, bypassing the BLE glitch window.
         """
-        if not self._attr_is_on or not self._source_should_be_on:
+        if not self._attr_is_on:
             return
         coordinator = self.hass.data.get(_BLE_ADV_COORD_KEY)
         if coordinator is None:
+            _LOGGER.debug("BLE: ha-ble-adv coordinator not found in hass.data")
             return
         raw = _reconstruct_adv_raw(service_info)
         if raw is None:
