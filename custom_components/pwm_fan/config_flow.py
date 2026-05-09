@@ -31,6 +31,8 @@ from .const import (
     DOMAIN,
 )
 
+
+
 _PERIOD_SELECTOR = NumberSelector(
     NumberSelectorConfig(min=0.1, max=300, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
 )
@@ -71,7 +73,6 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
 
     return vol.Schema(
         {
-            vol.Required(CONF_SOURCE_ENTITY, default=_get(CONF_SOURCE_ENTITY, "")): EntitySelector(EntitySelectorConfig(domain=FAN_DOMAIN)),
             vol.Optional(CONF_PWM_THRESHOLD, default=_get(CONF_PWM_THRESHOLD, DEFAULT_PWM_THRESHOLD)): _THRESHOLD_SELECTOR,
             vol.Optional(CONF_PWM_PERIOD, default=_get(CONF_PWM_PERIOD, DEFAULT_PWM_PERIOD)): _PERIOD_SELECTOR,
             vol.Optional(CONF_MIN_ON_TIME, default=_get(CONF_MIN_ON_TIME, DEFAULT_MIN_ON_TIME)): _TIME_SELECTOR,

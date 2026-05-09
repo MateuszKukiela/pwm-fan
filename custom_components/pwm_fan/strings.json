@@ -26,7 +26,6 @@
       "init": {
         "title": "PWM Fan options",
         "data": {
-          "source_entity": "Source fan entity",
           "pwm_threshold": "Native speed threshold (%; 0 = always PWM)",
           "pwm_period": "PWM cycle period (s)",
           "min_on_time": "Minimum ON time per cycle (s)",

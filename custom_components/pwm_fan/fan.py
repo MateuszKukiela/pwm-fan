@@ -18,7 +18,6 @@ from .const import (
     CONF_PWM_PERIOD,
     CONF_PWM_THRESHOLD,
     CONF_RAMP_UP_DURATION,
-    CONF_SOURCE_ENTITY,  # also used in async_options_updated for change detection
     CONF_SOURCE_SPEED,
     DEFAULT_GAMMA,
     DEFAULT_MIN_OFF_TIME,
@@ -184,15 +183,6 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_options_updated(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        new_source = entry.options.get(CONF_SOURCE_ENTITY, entry.data.get(CONF_SOURCE_ENTITY))
-        source_changed = new_source and new_source != self._source_entity_id
-
-        if source_changed:
-            self._stop_pwm()
-            await self._source_off()
-            self._source_entity_id = new_source
-            self._subscribe_state_listener()
-
         self._load_options(entry)
 
         if self._attr_is_on:
