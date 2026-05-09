@@ -130,11 +130,17 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             and self._source_should_be_on
         ):
             _LOGGER.debug("External turn-off detected on %s", self._source_entity_id)
-            self._stop_pwm()
-            self._source_should_be_on = False
             self._attr_is_on = False
             self._attr_percentage = 0
             self.async_write_ha_state()
+            self.hass.async_create_task(self._async_handle_external_off())
+
+    async def _async_handle_external_off(self) -> None:
+        await self._stop_pwm_async()
+        try:
+            await self._source_off()
+        except Exception:
+            pass
 
     async def async_will_remove_from_hass(self) -> None:
         await self._stop_pwm_async()
