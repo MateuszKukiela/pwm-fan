@@ -33,7 +33,8 @@
           "gamma": "Power curve exponent (0.1–2.0; <1 boosts low speeds)",
           "ramp_up_duration": "Ramp-up duration (s)",
           "source_speed": "Source fan speed during ON phase (%)",
-          "remote_off_id": "Remote OFF id (leave blank to discover — check HA logs after pressing remote)"
+          "remote_off_id": "Remote OFF id (leave blank to discover — check HA logs after pressing remote)",
+          "blocking_calls": "Blocking service calls (wait for source fan to confirm before continuing)"
         }
       }
     }

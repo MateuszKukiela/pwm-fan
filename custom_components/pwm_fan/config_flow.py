@@ -4,6 +4,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.fan import DOMAIN as FAN_DOMAIN
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -13,6 +14,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_BLOCKING_CALLS,
     CONF_GAMMA,
     CONF_MIN_OFF_TIME,
     CONF_MIN_ON_TIME,
@@ -22,6 +24,7 @@ from .const import (
     CONF_REMOTE_OFF_ID,
     CONF_SOURCE_ENTITY,
     CONF_SOURCE_SPEED,
+    DEFAULT_BLOCKING_CALLS,
     DEFAULT_GAMMA,
     DEFAULT_MIN_OFF_TIME,
     DEFAULT_MIN_ON_TIME,
@@ -82,6 +85,7 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
             vol.Optional(CONF_RAMP_UP_DURATION, default=_get(CONF_RAMP_UP_DURATION, DEFAULT_RAMP_UP_DURATION)): _RAMP_SELECTOR,
             vol.Optional(CONF_SOURCE_SPEED, default=_get(CONF_SOURCE_SPEED, DEFAULT_SOURCE_SPEED)): _SPEED_SELECTOR,
             vol.Optional(CONF_REMOTE_OFF_ID, default=_get(CONF_REMOTE_OFF_ID, "")): TextSelector(),
+            vol.Optional(CONF_BLOCKING_CALLS, default=_get(CONF_BLOCKING_CALLS, DEFAULT_BLOCKING_CALLS)): BooleanSelector(),
         }
     )
 

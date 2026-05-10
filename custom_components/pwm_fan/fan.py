@@ -19,6 +19,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    CONF_BLOCKING_CALLS,
     CONF_GAMMA,
     CONF_MIN_OFF_TIME,
     CONF_MIN_ON_TIME,
@@ -28,6 +29,7 @@ from .const import (
     CONF_REMOTE_OFF_ID,
     CONF_SOURCE_ENTITY,
     CONF_SOURCE_SPEED,
+    DEFAULT_BLOCKING_CALLS,
     DEFAULT_GAMMA,
     DEFAULT_MIN_OFF_TIME,
     DEFAULT_MIN_ON_TIME,
@@ -129,6 +131,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         self._ramp_up_duration = _get_opt(entry, CONF_RAMP_UP_DURATION, DEFAULT_RAMP_UP_DURATION)
         self._source_speed = int(_get_opt(entry, CONF_SOURCE_SPEED, DEFAULT_SOURCE_SPEED))
         self._pwm_threshold = int(_get_opt(entry, CONF_PWM_THRESHOLD, DEFAULT_PWM_THRESHOLD))
+        self._blocking_calls = bool(_get_opt(entry, CONF_BLOCKING_CALLS, DEFAULT_BLOCKING_CALLS))
 
     @property
     def supported_features(self) -> FanEntityFeature:
@@ -350,13 +353,13 @@ class PwmFanEntity(FanEntity, RestoreEntity):
         service_data: dict[str, Any] = {"entity_id": self._source_entity_id}
         if self._source_supports_speed():
             service_data["percentage"] = speed if speed is not None else self._source_speed
-        await self.hass.services.async_call("fan", "turn_on", service_data)
+        await self.hass.services.async_call("fan", "turn_on", service_data, blocking=self._blocking_calls)
 
     async def _source_off(self) -> None:
         self._source_should_be_on = False
         self._ble_confirmed_on = False
         await self.hass.services.async_call(
-            "fan", "turn_off", {"entity_id": self._source_entity_id}
+            "fan", "turn_off", {"entity_id": self._source_entity_id}, blocking=self._blocking_calls
         )
 
     def _calc_times(self, pct: float) -> tuple[float, float]:
