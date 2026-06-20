@@ -358,8 +358,18 @@ class PwmFanEntity(FanEntity, RestoreEntity):
     async def _source_on_full_speed(self) -> None:
         await self._source_on(speed=100)
 
-    async def _source_on_pwm_speed(self) -> None:
+    async def _source_set_pwm_speed(self) -> None:
         await self._source_on(speed=self._source_speed)
+
+    async def _source_on_without_speed(self) -> None:
+        self._source_should_be_on = True
+        self._ble_confirmed_on = False
+        await self.hass.services.async_call(
+            "fan",
+            "turn_on",
+            {"entity_id": self._source_entity_id},
+            blocking=self._blocking_calls,
+        )
 
     async def _source_off(self) -> None:
         self._source_should_be_on = False
@@ -381,8 +391,8 @@ class PwmFanEntity(FanEntity, RestoreEntity):
             if ramp_up and self._ramp_up_duration > 0:
                 await self._source_on_full_speed()
                 await asyncio.sleep(self._ramp_up_duration)
-                if self._attr_percentage > 0:
-                    await self._source_on_pwm_speed()
+            if self._attr_percentage > 0:
+                await self._source_set_pwm_speed()
 
             while True:
                 pct = self._attr_percentage or 0
@@ -395,7 +405,7 @@ class PwmFanEntity(FanEntity, RestoreEntity):
                     await asyncio.sleep(self._pwm_period)
                 else:
                     on_time, off_time = self._calc_times(pct)
-                    await self._source_on_pwm_speed()
+                    await self._source_on_without_speed()
                     await asyncio.sleep(on_time)
                     await self._source_off()
                     await asyncio.sleep(off_time)

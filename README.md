@@ -36,4 +36,4 @@ At a given speed percentage the integration cycles the underlying fan entity on 
 0% / off               → always OFF
 ```
 
-If ramp-up is enabled, the source fan starts at 100% for ramp-up duration, then drops to configured ON-phase source speed for PWM cycling.
+If ramp-up is enabled, source fan starts at 100% for ramp-up duration, then drops to configured ON-phase source speed. PWM loop then only toggles power on and off at that speed.
