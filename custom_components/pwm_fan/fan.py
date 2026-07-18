@@ -328,7 +328,11 @@ class PwmFanEntity(FanEntity, RestoreEntity):
 
     async def _start_pwm(self, ramp_up: bool = False) -> None:
         await self._stop_pwm_async()
-        self._pwm_task = self.hass.async_create_task(self._pwm_loop(ramp_up=ramp_up))
+        # Background task: the PWM loop runs forever, so a regular task would
+        # block bootstrap (HA awaits tasks created during setup) and delay shutdown.
+        self._pwm_task = self.hass.async_create_background_task(
+            self._pwm_loop(ramp_up=ramp_up), name=f"pwm_fan {self._source_entity_id}"
+        )
 
     async def _stop_pwm_async(self) -> None:
         if self._pwm_task and not self._pwm_task.done():
